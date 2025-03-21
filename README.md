@@ -4,6 +4,7 @@
 ## Основы Kotlin 
  Какие основные отличия Kotlin от Java? Преимущества Kotlin
  > NullSafety, сокращение кодовой базы на 20%, companion object, data-class
+
 Что такое null safety в Kotlin и как это работает?
 > Возможность избежать краша приложения из-за NPE
 Как объявить переменную в Kotlin? В чем разница между val и var?
