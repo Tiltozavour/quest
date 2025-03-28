@@ -121,7 +121,7 @@ class NetworkModule {
 > Создали экхемпляр класса okkhttp\
 > Метод с @Provides выполняет код и возвращает готовый объект.
 ```
-_Ключевые отличия_
+_Ключевые отличия_\
 |Характеристика	    | @Provides	                                      || @Binds\
 |Тип модуля         |	Обычный класс (class)                           ||	Абстрактный класс/интерфейс (abstract class/interface)\
 |Логика создания    |	Содержит код (например, return OkHttpClient())	 || Только объявление (например, bindStorage(impl: SharedPrefStorage): Storage)\
