@@ -23,11 +23,11 @@
 > (Автоматическое создание конструктора с параметрами, соответствующими именам свойств класса. Это упрощает создание экземпляров data class.)
 
 Как использовать функции расширения в Kotlin? 
->
-> ```
->  fun Fragment.toast(@StringRes stringRes: Int) {
+```
+ fun Fragment.toast(@StringRes stringRes: Int) {
     Toast.makeText(requireContext(), stringRes, Toast.LENGTH_SHORT).show()}
-> теперь во фрагменте можно вызвать тост, только словом toast
+```
+>  теперь во фрагменте можно вызвать тост, только словом toast
 
 Как объявить функцию в Kotlin? 
 > Ключевое слово fun
