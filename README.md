@@ -175,6 +175,79 @@ OnCreate() - onStart() - OnResume()
 > Destroyed (Уничтожение): View уничтожается, освобождая память и ресурсы, занимаемые этим элементом. Этот этап может наступить при завершении работы Activity или в случае явного удаления View.\
 
 **Как создать Custom View в Android?**
+> Наследуем класс от View
+```
+class MyCustomView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : View(context, attrs, defStyleAttr) { ...}
+```
+> В init обрабатываем кастомные атрибуту
+```
+    init {
+        // Обработка кастомных атрибутов
+        attrs?.let {
+            val typedArray = context.obtainStyledAttributes(
+                it,
+                R.styleable.MyCustomView,
+                defStyleAttr,
+                0
+            )
+
+            customColor = typedArray.getColor(
+                R.styleable.MyCustomView_customColor,
+                Color.RED
+            )
+            customText = typedArray.getString(
+                R.styleable.MyCustomView_customText
+            ) ?: "Default"
+
+            typedArray.recycle()
+        }
+    }
+```
+> Кастомные атрибуты можно установит через xml
+```
+<resources>
+    <declare-styleable name="MyCustomView">
+        <attr name="customColor" format="color"/>
+        <attr name="customText" format="string"/>
+        <attr name="customTextSize" format="dimension"/>
+    </declare-styleable>
+</resources>
+```
+> Переопределяем необходимые методы
+```
+override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+    val minWidth = suggestedMinimumWidth + paddingLeft + paddingRight
+    val minHeight = suggestedMinimumHeight + paddingTop + paddingBottom
+    
+    val width = resolveSize(minWidth, widthMeasureSpec)
+    val height = resolveSize(minHeight, heightMeasureSpec)
+    
+    setMeasuredDimension(width, height)
+}
+
+override fun onDraw(canvas: Canvas) {
+    super.onDraw(canvas)
+    
+    // Рисуем фон
+    canvas.drawColor(customColor)
+    
+    // Рисуем текст по центру
+    val textWidth = textPaint.measureText(customText)
+    val x = (width - textWidth) / 2
+    val y = (height - textPaint.textSize) / 2 + textPaint.textSize
+    
+    canvas.drawText(customText, x, y, textPaint)
+}
+```
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## Compose
+**Что такое remember и mutableStateOf в Compose?**
+> mutableStateOf - это функция, которая создает наблюдаемое состояние и при изменении значения автоматически вызывает рекомпозицию всех зависимых от него композаблов\
+> remember - это функция, которая сохраняет значение между рекомпозициями. Без remember значение будет сбрасываться при каждой рекомпозиции
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## Dagger\Di
@@ -337,13 +410,52 @@ _Кто может выступать в роли монитора?_
 Без volatile поток может закешировать значение переменной, и изменения из других потоков не будут видны.
 С volatile JVM гарантирует "happens-before" — запись в volatile-поле происходит до любого последующего чтения.
 ```
-
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-Косяки 
-1. Что такое remember и mutableStateOf в Compose?
-Что такое merge и rebase? Какая разница?
-Какие виды паттернов существуют(4шт.)
+##Архитектура
+*Какие виды паттернов существуют(4шт.)*
+> Порождающие (Creational) - Помогают создавать объекты
+```
+Singleton (object в Kotlin) – например, Retrofit клиент или база данных Room:
+Factory Method – например, создание ViewModel через ViewModelProvider.Factory.
+Builder – например, AlertDialog.Builder в Android:
+```
+> Структурные (Structural) - Организуют классы и объекты в структуры
+```
+Adapter – например, RecyclerView.Adapter для списков
+Decorator – например, модификация Context с помощью ContextWrapper.
+Facade – упрощение работы с API, например, обертка над Retrofit + Room.
+```
+> Поведенческие (Behavioral) - Управляют взаимодействием между объектами.
+```
+Observer – LiveData, Flow, интерфейсы слушателей (например, OnClickListener):
+State – управление состоянием UI (например, кнопка "Loading"/"Success"/"Error").
+Command – обработка нажатий кнопок или событий:
+```
+> Архитектурные (Architectural) - Определяют структуру всего приложения.
+```
+MVVM (Model-View-ViewModel) – стандарт для Android с ViewModel и LiveData:
+Repository – абстракция для работы с данными (например, комбинация API + БД).
+Clean Architecture – разделение на слои (domain, data, presentation).
+```
+> Популярные Android-специфичные паттерны
+```
+Dependency Injection (DI) – через Hilt или Koin
+ViewBinding/DataBinding – для безопасной работы с UI.
+```
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## Git
+*Что такое merge и rebase? Какая разница?*
+>  Merge (слияние)
+```
+Как работает: Создает новый коммит, который объединяет изменения из двух веток. Этот коммит имеет двух родителей (от каждой ветки).
+История коммитов: История остается неизменной, добавляется только новый коммит слияния. Это сохраняет полную историю разработки, включая все ветки.
+```
+> Rebase (перебазирование)
+```
+Как работает: Перемещает коммиты из одной ветки и применяет их поверх другой ветки, как если бы они были сделаны последовательно. Это создает линейную историю.
+История коммитов: История изменяется, коммиты переписываются, чтобы выглядеть так, как будто они были сделаны поверх текущей ветки. Это делает историю более чистой и линейной.
+```
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
  ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
