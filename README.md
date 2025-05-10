@@ -820,8 +820,11 @@ _Кто может выступать в роли монитора?_
   <summary>Gradle</summary>
 
 ## **Что такое Gradle?**
+<details>
+  <summary>Что такое Gradle/summary>
 Gradle — это система автоматизации сборки проектов, которая использует Groovy или Kotlin DSL (Domain-Specific Language) для написания скриптов
-
+  </details>
+    
 ## **Чем gradle отличается от Maven, Ant?**\
 Ключевые отличия\
 _Язык конфигурации_\
