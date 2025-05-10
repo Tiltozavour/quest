@@ -401,7 +401,7 @@ override fun onDraw(canvas: Canvas) {
 ```
 
  Как работать с ConstraintLayout? 
-• Какие виды анимаций в Android вы знаете? 
+ Какие виды анимаций в Android вы знаете? 
 • Как работает ViewBinding и чем он лучше findViewById? 
 • Что такое DataBinding и как его использовать? 
 • Что такое LinearLayout и как его использовать? 
