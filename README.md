@@ -1008,15 +1008,182 @@ Gradle Wrapper (обёртка) — это скрипт, который гара
 > Проект соберётся без предварительной установки Gradle на машине.\
 > Исключаются проблемы с несовместимостью версий.\
 Без Wrapper'а пришлось бы вручную устанавливать Gradle и следить за его версией.\
+\
+_Как работать с Gradle Wrapper?_\
+- Установка Wrapper в проект\
+> gradle wrapper --gradle-version 8.5\
   
+```
+Это создаст:
+gradlew (Linux/macOS) и gradlew.bat (Windows) — скрипты для запуска.
+gradle/wrapper/ → gradle-wrapper.jar + gradle-wrapper.properties (настройки).
+```
+- Использование Wrapper вместо Gradle\
+Все команды Gradle теперь выполняются через Wrapper:\
+```
+gradlew.bat test 
+./gradlew --version
+Wrapper скачает нужную версию Gradle при первом запуске (если её нет).
+Версия Gradle фиксируется в gradle-wrapper.properties.
+```
+- Где настраивается версия Gradle?\
+файл:
+```
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+```
+- Как обновить версию Gradle в Wrapper?
+```
+./gradlew wrapper --gradle-version 8.6
+```
+При следующем запуске Wrapper скачает новую версию.\
+
 </details>
 
 ## **Как управлять зависимостями (implementation vs api, compileOnly, runtimeOnly)?**
+<details>
+  <summary>Ответ</summary>
+  
+_implementation - для большинства зависимостей_\
+> Зависимость доступна только текущему модулю\
+> Не транзитивно экспортируется к потребителям модуля\
+> Улучшает время сборки (меньше перекомпиляции при изменениях)\
+
+  ```
+dependencies {
+    implementation 'com.google.guava:guava:31.1-jre'
+}
+  ```
+_api (ранее compile) - зависимость должна быть видна потребителям вашего модуля_\
+> Зависимость транзитивно экспортируется\
+> Изменения в API зависимости потребуют перекомпиляции всех потребителей\
+
+```
+dependencies {
+    api 'org.apache.commons:commons-lang3:3.12.0'
+}
+```
+_compileOnly - для зависимостей, нужных только во время компиляции, аннотационных процессоров (например, Lombok), библиотек, уже предоставляемых средой выполнения_\
+> Зависимость не включается в итоговый артефакт (JAR/WAR)\
+> Не транзитивно экспортируется\
+```
+gradle
+dependencies {
+    compileOnly 'org.projectlombok:lombok:1.18.24'
+}
+```
+_runtimeOnly (ранее runtime) - для зависимостей, нужных только во время выполнения, JDBC-драйверов, Библиотеки, использующие reflection_\
+> Зависимость не нужна для компиляции\
+> Включается в runtime-класспасс\
+```
+gradle
+dependencies {
+    runtimeOnly 'mysql:mysql-connector-java:8.0.28'
+}
+```
+_testImplementation - для зависимостей, используемых только в тестах_\
+```
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}
+```
+_annotationProcessor - для обработки аннотаций во время компиляции_\
+```
+dependencies {
+    annotationProcessor 'org.projectlombok:lombok:1.18.24'
+}
+```
+  </details>
 
 ## **Что такое конфигурации (configurations) в Gradle?**
-
-
+<details>
+  <summary>Ответ</summary>
   
+> Конфигурации в Gradle — это наборы зависимостей и артефактов, которые определяют, как библиотеки используются в разных фазах сборки (компиляция, тестирование, выполнение).\
+> Они позволяют гибко управлять classpath проекта и контролировать, какие зависимости доступны в разных контекстах.
+
+_Основные типы конфигураций_\
+```
+implementation	Зависимости для компиляции и runtime, но не экспортируются в другие модули.
+api	Зависимости, которые должны быть видны другим модулям (транзитивные).
+compileOnly	Библиотеки, нужные только для компиляции (не попадают в итоговый билд).
+runtimeOnly	Библиотеки, требуемые только во время выполнения (не для компиляции).
+testImplementation	Аналогично implementation, но только для тестов.
+testCompileOnly	Аналог compileOnly для тестов.
+annotationProcessor	Зависимости для обработки аннотаций (например, Lombok).
+```
+
+_Как работают конфигурации?_\
+Каждая конфигурация:\
+- Определяет scope зависимостей (компиляция, тесты, runtime).\
+- Управляет транзитивностью (передаются ли зависимости другим модулям).\
+- Формирует classpath для разных задач (compileJava, test, run).\
+Пример:
+```
+dependencies {
+    implementation 'org.springframework:spring-core:5.3.10'  // Основная зависимость
+    testImplementation 'junit:junit:4.13.2'                 // Только для тестов
+    compileOnly 'org.projectlombok:lombok:1.18.22'          // Только для компиляции
+}
+```
+_Иерархия конфигураций_\
+Gradle строит иерархию конфигураций, где одни могут наследовать зависимости от других.\
+Пример наследования\
+
+```
+Конфигурация runtime включает все зависимости из implementation + runtimeOnly.
+Конфигурация testRuntime включает testImplementation + runtimeOnly.
+```
+
+```
+configurations {
+    runtime.extendsFrom(implementation)
+    testRuntime.extendsFrom(testImplementation)
+}
+```
+_Кастомные конфигурации_\
+> Можно создавать свои конфигурации для специфичных нужд.
+Пример: Конфигурация для Docker-зависимостей
+
+```
+configurations {
+    dockerLibs  // Новая конфигурация
+}
+
+dependencies {
+    dockerLibs 'com.spotify:docker-client:8.16.0'  // Зависимость только для Docker
+}
+
+tasks.register('copyDockerLibs', Copy) {
+    from configurations.dockerLibs
+    into "$buildDir/docker-libs/"
+}
+```
+_Доступные свойства конфигураций_\
+У каждой конфигурации есть полезные свойства:\
+- dependencies — список зависимостей.\
+- resolvedConfiguration — разрешённые артефакты (после загрузки).\
+- isTransitive — включена ли транзитивность (по умолчанию true).\
+
+Пример: Вывод всех зависимостей\
+
+```
+gradle
+task printDeps {
+    doLast {
+        configurations.implementation.dependencies.each { dep ->
+            println("Dependency: ${dep.group}:${dep.name}:${dep.version}")
+        }
+    }
+}
+
+Запуск:
+bash
+gradle printDeps
+```
+  </details>
+ </details>
+
+ 
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 <details>
