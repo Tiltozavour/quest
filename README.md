@@ -1290,13 +1290,99 @@ gradle printDeps
 ### Gradle Custom 
 <details>
   <summary>Custom</summary>
-     ## Как создать простой Gradle-плагин?
   
-   </details>
-   
+## Как создать простой Gradle-плагин?
+ <details>
+  <summary>Ответ</summary>
 
-   
- </details>
+</details>
+
+## В чем разница между Script Plugin, Binary Plugin и Precompiled Script Plugin?
+ <details>
+  <summary>Ответ</summary>
+> Script Plugin (Скриптовый плагин) - Обычный файл скрипта Gradle (.gradle), содержащий логику сборки.
+  
+_Характеристики_\
+- Простейшая форма плагина
+- Это просто файл с кодом Groovy/Kotlin DSL
+- Применяется с помощью apply from: 'path/to/script.gradle'
+- Не имеет собственного идентификатора (ID)
+- Не может быть опубликован в репозиторий
+- Не поддерживает автоматическое обнаружение
+
+Пример:
+```
+// utilities.gradle
+task hello {
+    doLast {
+        println "Hello from script plugin"
+    }
+}
+Применение:
+apply from: 'utilities.gradle'
+```
+>  Binary Plugin (Бинарный плагин) -  Плагин, реализованный как класс, который компилируется в бинарный формат.
+
+_Характеристики:_
+- Реализуется как класс, имплементирующий Plugin<Project>
+- Упаковывается в JAR-файл
+- Имеет уникальный ID (например com.example.myplugin)
+- Может быть опубликован в репозиторий (Maven, Ivy)
+- Поддерживает автоматическое обнаружение через META-INF/gradle-plugins
+- Может иметь расширения для конфигурации
+  
+Пример:
+```
+// MyPlugin.groovy
+class MyPlugin implements Plugin<Project> {
+    void apply(Project project) {
+        project.task('binaryTask') {
+            doLast { println "From binary plugin" }
+        }
+    }
+}
+Применение:
+groovy
+plugins {
+    id 'com.example.myplugin' version '1.0'
+}
+```
+
+> Precompiled Script Plugin (Предкомпилированный скриптовый плагин) -  Гибридный вариант, где плагин пишется как скрипт, но компилируется в бинарный формат.
+
+_Характеристики:_
+- Похож на Script Plugin по синтаксису
+- Компилируется в бинарный формат как Binary Plugin
+- Поддерживается только в Kotlin DSL (с версии Gradle 5.0)
+- Файлы должны находиться в src/main/kotlin
+- Имена файлов становятся ID плагина (например hello.gradle.kts → ID hello)
+- Может использовать plugins {} блок для зависимостей
+
+Пример:
+
+```
+kotlin
+// src/main/kotlin/hello.gradle.kts
+tasks.register("precompiledTask") {
+    doLast {
+        println("From precompiled script plugin")
+    }
+}
+Применение:
+
+kotlin
+plugins {
+    id("hello")
+}
+```
+
+</details>
+
+## 
+  
+</details>
+
+</details>
 
  
 
