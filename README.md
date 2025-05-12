@@ -1409,7 +1409,7 @@ plugins {
 <details>
   <summary><h2>⚡Создание библиотек кодогенерации на Kotlin/Java </h2></summary>
 
-  ### Какие есть библиотеки для кодогенерации в Java/Kotlin (KSP, JavaPoet, KotlinPoet, ANTLR)?
+  ### 📦 Какие есть библиотеки для кодогенерации в Java/Kotlin (KSP, JavaPoet, KotlinPoet, ANTLR)?
 
   <details>
   <summary> Ответ </summary>
@@ -1538,7 +1538,7 @@ _Шаг 5: Повторные раунды обработки_
 
 </details>
 
-### Чем KSP (Kotlin Symbol Processing) отличается от KAPT?
+### 📦 Чем KSP (Kotlin Symbol Processing) отличается от KAPT?
 
 <details>
  <summary> Ответ </summary>
@@ -1591,7 +1591,7 @@ dependencies {
 
 </details>
 
-## Как создать собственный процессор аннотаций(через KSP)?
+### 📦Как создать собственный процессор аннотаций(через KSP)?
 
 <details>
  <summary> Ответ </summary>
@@ -1722,8 +1722,289 @@ class MyClassGenerated {
 
 </details>
 
-## 888888888888888888888888888
+### 📦 Как интегрировать кодогенерацию в Gradle-сборку?
 
+<details>
+ <summary> Ответ </summary>
+
+> Кодогенерация может выполняться через KSP (Kotlin), APT (Java), кастомные таски или плагины
+
+<details>
+ <summary> Кодогенерация через KSP </summary>
+
+- Настройка build.gradle.kts
+```
+kotlin
+plugins {
+    id("com.google.devtools.ksp") version "1.9.22-1.0.17" // KSP плагин
+    kotlin("jvm") version "1.9.22"                         // Kotlin
+}
+
+dependencies {
+    implementation("com.example:my-annotations:1.0")       // Аннотации
+    ksp("com.example:my-processor:1.0")                    // Процессор KSP
+}
+```
+
+-  Где появляются сгенерированные файлы?
+
+По умолчанию KSP генерирует код в:\
+
+> build/generated/ksp/main/kotlin/
+
+Чтобы добавить их в исходники:\
+```
+kotlin
+kotlin {
+    sourceSets.main {
+        kotlin.srcDir("build/generated/ksp/main/kotlin")
+    }
+}
+```
+
+</details>
+
+<details>
+ <summary> Кодогенерация через APT + JavaPoet </summary>
+  
+-  Настройка build.gradle.kts
+  
+```
+kotlin
+plugins {
+    id("java")
+}
+
+dependencies {
+    implementation("com.example:my-annotations:1.0")        // Аннотации
+    annotationProcessor("com.example:my-processor:1.0")     // Процессор APT
+}
+```
+
+-  Где появляются сгенерированные файлы?
+
+> build/generated/sources/annotationProcessor/java/main/
+
+Чтобы добавить их в исходники:\
+```
+kotlin
+sourceSets.main {
+    java.srcDir("build/generated/sources/annotationProcessor/java/main")
+}
+```
+
+</details>
+
+<details>
+ <summary>Ручная кодогенерация через кастомные Gradle-таски  </summary>
+
+- Создаем кастомную задачу
+```
+Пример: Генерация кода из JSON
+kotlin
+tasks.register("generateCode") {
+    doLast {
+        val outputDir = file("build/generated/custom")
+        outputDir.mkdirs()
+
+        val json = file("src/main/resources/model.json").readText()
+        val generatedCode = """
+            package com.example
+            
+            data class Model(
+                val id: Int,
+                val name: String
+            )
+        """.trimIndent()
+
+        file("$outputDir/Model.kt").writeText(generatedCode)
+    }
+}
+```
+
+- Добавляем сгенерированный код в исходники
+```
+kotlin.sourceSets.main {
+    kotlin.srcDir("build/generated/custom")
+}
+```
+- Запускаем генерацию перед компиляцией
+```
+tasks.named("compileKotlin") {
+    dependsOn("generateCode")
+}
+```
+
+<details>
+ <summary> Кодогенерация через кастомные Gradle-плагины </summary>
+
+> Способ 1: **Inline-плагин** (в build.gradle.kts) - подходит для простых случаев.
+
+```
+ Пример: Генерация Kotlin-классов из JSON
+kotlin
+// build.gradle.kts
+abstract class CodegenPlugin : Plugin<Project> {
+    override fun apply(project: Project) {
+        project.tasks.register("generateModels") {
+            doLast {
+                val outputDir = project.layout.buildDirectory.dir("generated/sources/custom").get()
+                outputDir.asFile.mkdirs()
+
+                val json = project.file("src/main/resources/model.json").readText()
+                val data = Json.decodeFromString<ModelSchema>(json) // Используем kotlinx.serialization
+
+                data.classes.forEach { cls ->
+                    val code = """
+                        package ${cls.packageName}
+                        
+                        data class ${cls.name}(
+                            ${cls.fields.joinToString(",\n    ") { "val ${it.name}: ${it.type}" }}
+                        )
+                    """.trimIndent()
+
+                    outputDir.file("${cls.name}.kt").asFile.writeText(code)
+                }
+            }
+        }
+          //Добавляем сгенерированный код в исходники
+        project.kotlin.sourceSets.main {
+            kotlin.srcDir(project.layout.buildDirectory.dir("generated/sources/custom"))
+        }
+
+          //Зависимость компиляции от генерации
+        project.tasks.named("compileKotlin") {
+            dependsOn("generateModels")
+        }
+    }
+}
+```
+- Применяем плагин
+```
+apply<CodegenPlugin>()
+```
+
+>  Способ 2: **Standalone-плагин** (отдельный модуль) - подходит для сложных сценариев и переиспользования.
+
+-  Структура проекта\
+my-codegen-plugin/\
+├── build.gradle.kts\
+├── src/main/kotlin/\
+│   └── com/example/\
+│       ├── CodegenPlugin.kt\
+│       └── CodegenTask.kt\
+
+-  Реализация плагина
+```
+kotlin
+// CodegenPlugin.kt
+class CodegenPlugin : Plugin<Project> {
+    override fun apply(project: Project) {
+        project.tasks.register("generateCode", CodegenTask::class.java) {
+            it.outputDir.set(project.layout.buildDirectory.dir("generated/sources/custom"))
+            it.inputFile.set(project.file("src/main/resources/model.json"))
+        }
+
+        project.kotlin.sourceSets.main {
+            kotlin.srcDir(project.tasks.named("generateCode").flatMap { it.outputDir })
+        }
+    }
+}
+
+// CodegenTask.kt
+abstract class CodegenTask : DefaultTask() {
+    @get:InputFile
+    abstract val inputFile: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val json = inputFile.get().asFile.readText()
+        // ... генерация кода (аналогично примеру выше)
+    }
+}
+```
+- Публикация плагина (в build.gradle.kts плагина):
+```
+kotlin
+plugins {
+    id("java-gradle-plugin")
+    id("maven-publish")
+}
+
+gradlePlugin {
+    plugins {
+        create("codegen") {
+            id = "com.example.codegen"
+            implementationClass = "com.example.CodegenPlugin"
+        }
+    }
+}
+
+publishing {
+    repositories {
+        mavenLocal() // Для тестов
+    }
+}
+```
+-  Применение в другом проекте
+```
+kotlin
+// settings.gradle.kts
+pluginManagement {
+    repositories {
+        mavenLocal()
+        gradlePluginPortal()
+    }
+}
+```
+```
+// build.gradle.kts
+plugins {
+    id("com.example.codegen") version "1.0"
+}
+```
+
+> Способ 3: **Precompiled Script-плагин** (Kotlin DSL) -  баланс между простотой и мощностью.
+
+- Структура\
+buildSrc/\
+├── build.gradle.kts\
+├── src/main/kotlin/\
+│   └── my-codegen.gradle.kts\
+
+- Код плагина (my-codegen.gradle.kts)
+```
+kotlin
+// buildSrc/src/main/kotlin/my-codegen.gradle.kts
+tasks.register("generateCode") {
+    doLast {
+        val outputDir = layout.buildDirectory.dir("generated/sources/custom").get()
+        // ... генерация кода
+    }
+}
+
+kotlin.sourceSets.main {
+    kotlin.srcDir(layout.buildDirectory.dir("generated/sources/custom"))
+}
+```
+- Применение
+```
+kotlin
+// build.gradle.kts
+apply(from = "my-codegen.gradle.kts")
+```
+
+ </details>
+
+ </details>
+
+</details>
+
+
+### 📦 
 <details>
  <summary> Ответ </summary>
 
