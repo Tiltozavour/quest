@@ -1591,10 +1591,134 @@ dependencies {
 
 </details>
 
-## 888888888888888888888888888
+## Как создать собственный процессор аннотаций(через KSP)?
 
 <details>
  <summary> Ответ </summary>
+
+  <details>
+ <summary> Создание </summary>
+
+Добавляем зависимости
+```
+  В build.gradle.kts модуля, где будет процессор:
+
+kotlin
+plugins {
+    id("com.google.devtools.ksp") version "1.9.0-1.0.13" // KSP плагин
+    kotlin("jvm") version "1.9.0"                        // Kotlin
+}
+
+dependencies {
+    implementation("com.google.devtools.ksp:symbol-processing-api:1.9.0-1.0.13") // KSP API
+}
+```
+2. Создаем аннотацию
+```
+// Аннотация, которую будем обрабатывать
+@Retention(AnnotationRetention.SOURCE) // Только на этапе компиляции
+@Target(AnnotationTarget.CLASS)        // Можно применять только к классам
+annotation class MyAnnotation
+```
+3.  Реализуем SymbolProcessor
+```
+Создаем класс, который будет обрабатывать аннотации:
+
+kotlin
+class MyProcessor(
+    private val codeGenerator: CodeGenerator, // Для генерации кода
+    private val logger: KSPLogger            // Для логирования
+) : SymbolProcessor {
+
+    override fun process(resolver: Resolver): List<KSAnnotated> {
+        // Получаем все классы с аннотацией @MyAnnotation
+        val symbols = resolver
+            .getSymbolsWithAnnotation("com.example.MyAnnotation")
+            .filterIsInstance<KSClassDeclaration>()
+
+        symbols.forEach { classDecl ->
+            // Генерируем новый файл
+            generateFile(classDecl)
+        }
+
+        return emptyList() // Успешно обработано
+    }
+
+    private fun generateFile(classDecl: KSClassDeclaration) {
+        val packageName = classDecl.packageName.asString()
+        val className = "${classDecl.simpleName.asString()}Generated"
+
+        // Создаем код (можно использовать KotlinPoet для удобства)
+        val fileContent = """
+            |package $packageName
+            |
+            |class $className {
+            |    fun hello() {
+            |        println("Hello from ${classDecl.simpleName.asString()}!")
+            |    }
+            |}
+        """.trimMargin()
+
+        // Сохраняем сгенерированный файл
+        codeGenerator.createNewFile(
+            dependencies = Dependencies(false),
+            packageName = packageName,
+            fileName = className
+        ).use { output ->
+            output.write(fileContent.toByteArray())
+        }
+    }
+}
+```
+4. Регистрируем процессор
+Создаем файл в resources/META-INF/services/com.google.devtools.ksp.processing.SymbolProcessorProvider И реализуем SymbolProcessorProvider:
+```
+kotlin
+class MyProcessorProvider : SymbolProcessorProvider {
+    override fun create(
+        environment: SymbolProcessorEnvironment
+    ): SymbolProcessor {
+        return MyProcessor(environment.codeGenerator, environment.logger)
+    }
+}
+```
+
+</details>
+
+<details>
+ <summary> Подключение процессора в другом модуле </summary>
+  
+1. Добавляем зависимость на процессор
+```
+  В build.gradle.kts основного модуля:
+kotlin
+plugins {
+    id("com.google.devtools.ksp") version "1.9.0-1.0.13"
+}
+
+dependencies {
+    implementation(project(":my-annotation"))        // Аннотация
+    ksp(project(":my-processor"))                   // Процессор
+}
+```
+2. Используем аннотацию
+```
+kotlin
+@MyAnnotation
+class MyClass
+После компиляции KSP сгенерирует файл:
+
+kotlin
+package com.example
+
+class MyClassGenerated {
+    fun hello() {
+        println("Hello from MyClass!")
+    }
+}
+```
+
+</details>
 
 </details>
 
