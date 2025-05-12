@@ -1460,7 +1460,7 @@ _Javassist_\
 
 </details>
 
-### Как работает Annotation Processing (APT) в Java?
+### 📦 Как работает Annotation Processing (APT) в Java?
 
 <details>
  <summary> Ответ </summary>
@@ -2004,19 +2004,144 @@ apply(from = "my-codegen.gradle.kts")
 </details>
 
 
-### 📦 
+### 📦 Как генерировать код во время компиляции?
+<details>
+ <summary> Ответ </summary>
+ Генерация кода на этапе компиляции возможна через:\
+
+<details>
+ <summary>  Через обработку аннотаций (KSP/APT) - для генерации на основе метаданных </summary>
+  
+ > Шаг 1: Добавляем KSP в build.gradle.kts
+  
+```
+kotlin
+plugins {
+    id("com.google.devtools.ksp") version "1.9.22-1.0.17"
+}
+
+dependencies {
+    implementation("com.example:annotations:1.0")  // Ваши аннотации
+    ksp("com.example:processor:1.0")              // Процессор кодогенерации
+}
+```
+
+> Шаг 2: Создаем процессор
+
+```
+kotlin
+class MyProcessor(
+    private val codeGenerator: CodeGenerator,
+    private val logger: KSPLogger
+) : SymbolProcessor {
+
+    override fun process(resolver: Resolver): List<KSAnnotated> {
+        val symbols = resolver.getSymbolsWithAnnotation("com.example.MyAnnotation")
+        symbols.forEach { generateCode(it) }
+        return emptyList()
+    }
+
+    private fun generateCode(element: KSAnnotated) {
+        val file = codeGenerator.createNewFile(
+            dependencies = Dependencies(false),
+            packageName = "com.example",
+            fileName = "GeneratedClass"
+        )
+        file.write("class GeneratedClass { fun hello() { println(\"Hello!\") } }".toByteArray())
+    }
+}
+```
+> Где появляется код:
+> 
+```
+build/generated/ksp/main/kotlin/com/example/GeneratedClass.kt
+```
+
+ </details>
+
+<details>
+ <summary>  Gradle-плагины – для кастомной логики (например, из JSON/XML) </summary>
+
+>  Inline-задача в build.gradle.kts
+```
+kotlin
+tasks.register("generateCode") {
+    val outputDir = layout.buildDirectory.dir("generated/sources/custom")
+    outputs.dir(outputDir)  // Для инкрементальной сборки
+
+    doLast {
+        val json = file("src/main/resources/data.json").readText()
+        val code = """
+            package com.example
+            class GeneratedFromJson { 
+                fun print() { println("Data: ${json}") }
+            }
+        """.trimIndent()
+
+        outputDir.get().asFile.resolve("GeneratedFromJson.kt").writeText(code)
+    }
+}
+
+```
+>  Добавляем сгенерированный код в исходники
+
+```
+kotlin.sourceSets.main {
+    kotlin.srcDir(tasks.named("generateCode"))
+}
+```
+
+</details>
+
+<details>
+ <summary> Байткод-манипуляции (ASM/Byte Buddy) – если нужно модифицировать.class-файлы. </summary>
+  
+```
+kotlin
+tasks.compileKotlin {
+    doLast {
+        ByteBuddy()
+            .subclass(Object::class.java)
+            .name("com.example.DynamicClass")
+            .method(ElementMatchers.named("toString"))
+            .intercept(FixedValue.value("Hello, ByteBuddy!"))
+            .make()
+            .saveIn(File("build/classes/kotlin/main"))  // Куда сохранять
+    }
+}
+```
+
+</details>
+
+
+### 📦 Как работать с AST (Abstract Syntax Tree) в кодогенерации?
 <details>
  <summary> Ответ </summary>
 
 </details>
 
+### 📦 Как тестировать сгенерированный код?
+<details>
+ <summary> Ответ </summary>
+
+</details>
+
+### 📦 Как избежать конфликтов имен при генерации кода?
+<details>
+ <summary> Ответ </summary>
+
+</details>
+
+### 📦 Как сделать кодогенерацию инкрементальной для ускорения сборки?
+<details>
+ <summary> Ответ </summary>
+
+</details>
 
  </details>
-
  
-
-
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 <details>
   <summary><h2> 🐙Git </h2></summary>
   
