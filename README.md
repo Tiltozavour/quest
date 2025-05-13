@@ -1075,10 +1075,16 @@ _Кто может выступать в роли монитора?_
 
 </details>
 
+
  <details>
-  <summary>  В чем разница между Observable, Flowable, Single, Maybe и Completable? </summary>
+  <summary> 🔥 В чем разница между Observable, Flowable, Single, Maybe и Completable? </summary>
 
   </details>
+
+</details>
+
+
+
 
 
 Что такое Observer и Subscriber? Как они связаны?
