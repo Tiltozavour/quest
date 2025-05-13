@@ -1062,7 +1062,7 @@ _Кто может выступать в роли монитора?_
   <summary> 🔥 Основы RxJava </summary>
 
  <details>
-  <summary>  Что такое RxJava и какие проблемы она решает? </summary>
+  <summary> 🔥 Что такое RxJava и какие проблемы она решает? </summary>
 
   > RxJava – это реализация реактивного программирования (ReactiveX) для Java и Android, основанная на паттерне Observer и концепции потоков данных (streams), созданная для организации многопоточности в Android
 
@@ -1074,7 +1074,6 @@ _Кто может выступать в роли монитора?_
 - Schedulers – управление потоками выполнения (multithreading).
 
 </details>
-
 
  <details>
   <summary> 🔥 В чем разница между Observable, Flowable, Single, Maybe и Completable? </summary>
@@ -1198,14 +1197,159 @@ Completable.fromAction(() -> api.logEvent("click"))
 
   </details>
 
+ <details>
+  <summary> 🔥 Что такое Observer и Subscriber? Как они связаны? </summary>
+
+  > В RxJava Observer и Subscriber — это абстракции, которые позволяют подписываться на потоки данных (Observable, Flowable и др.) и реагировать на их события.
+
+ <details>
+  <summary> Observer (Наблюдатель) </summary>
+
+> Observer — это интерфейс, который определяет методы для обработки событий потока:
+
+- onNext(T value) — получение нового элемента.
+- onError(Throwable e) — ошибка в потоке.
+- onComplete() — успешное завершение потока.
+- onSubscribe(Disposable d) — вызывается при подписке (дает контроль над отменой).
+
+Пример:
+```
+java
+Observer<String> observer = new Observer<String>() {
+    @Override
+    public void onSubscribe(Disposable d) {
+        System.out.println("Подписка создана");
+    }
+
+    @Override
+    public void onNext(String s) {
+        System.out.println("Получено: " + s);
+    }
+
+    @Override
+    public void onError(Throwable e) {
+        System.out.println("Ошибка: " + e);
+    }
+
+    @Override
+    public void onComplete() {
+        System.out.println("Поток завершен");
+    }
+};
+
+Observable.just("Hello", "World").subscribe(observer);
+```
+
+Вывод:
+
+```
+Подписка создана
+Получено: Hello
+Получено: World
+Поток завершен
+```
+
+</details>
+
+ <details>
+  <summary> Subscriber (Подписчик) </summary>
+   
+> Subscriber — это расширенный Observer, который используется в Flowable (потоки с поддержкой Backpressure).
+
+Добавляет метод:
+
+> onSubscribe(Subscription s) — вместо Disposable, позволяет запрашивать элементы вручную (управление Backpressure).
+
+```
+Пример:
+java
+Subscriber<String> subscriber = new Subscriber<String>() {
+    private Subscription subscription;
+
+    @Override
+    public void onSubscribe(Subscription s) {
+        this.subscription = s;
+        s.request(1); // Запрашиваем 1 элемент (Backpressure)
+    }
+
+    @Override
+    public void onNext(String s) {
+        System.out.println("Получено: " + s);
+        subscription.request(1); // Запрашиваем следующий
+    }
+
+    @Override
+    public void onError(Throwable t) {
+        System.out.println("Ошибка: " + t);
+    }
+
+    @Override
+    public void onComplete() {
+        System.out.println("Поток завершен");
+    }
+};
+
+Flowable.just("Rx", "Java").subscribe(subscriber);
+```
+
+Вывод:
+
+```
+Получено: Rx
+Получено: Java
+Поток завершен
+```
+
+  </details>
+
+
+ <details>
+  <summary> Дополнительное </summary>
+
+Преобразования:
+- Subscriber — это подкласс Observer (но не наоборот).
+- Flowable.subscribe(Subscriber) — требует управления Backpressure.
+- Observable.subscribe(Observer) — не требует.
+
+
+Упрощенная подписка (лямбда)\
+RxJava позволяет подписываться без явного создания Observer/Subscriber:\
+
+```
+java
+// Для Observable
+Observable.just("Hi").subscribe(
+    item -> System.out.println(item), // onNext
+    error -> System.out.println(error), // onError
+    () -> System.out.println("Done") // onComplete
+);
+
+// Для Flowable (с Backpressure)
+Flowable.range(1, 10).subscribe(
+    item -> System.out.println(item),
+    error -> System.out.println(error),
+    () -> System.out.println("Done"),
+    subscription -> subscription.request(Long.MAX_VALUE) // onSubscribe
+);
+```
+
+Вывод:
+
+- Observer — базовая абстракция для подписки на данные.
+- Subscriber — его расширенная версия для Flowable с управлением Backpressure.
+- В большинстве случаев (кроме Flowable) достаточно Observer или лямбда-подписки.
+
 </details>
 
 
 
+</details>
+  
+
+</details>
 
 
-Что такое Observer и Subscriber? Как они связаны?
-Объясни принцип Push vs Pull в контексте RxJava.
+
 Что такое Backpressure и как с ним работать в RxJava?
 
 </details>
