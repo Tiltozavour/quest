@@ -1063,11 +1063,24 @@ _Кто может выступать в роли монитора?_
 
  <details>
   <summary>  Что такое RxJava и какие проблемы она решает? </summary>
-  
+
+  > RxJava – это реализация реактивного программирования (ReactiveX) для Java и Android, основанная на паттерне Observer и концепции потоков данных (streams), созданная для организации многопоточности в Android
+
+Основные сущности:
+
+- Observable / Flowable – источник данных (стрим).
+- Observer / Subscriber – подписчик, который обрабатывает данные.
+- Operators – функции для преобразования, фильтрации и комбинирования потоков.
+- Schedulers – управление потоками выполнения (multithreading).
 
 </details>
 
-В чем разница между Observable, Flowable, Single, Maybe и Completable?
+ <details>
+  <summary>  В чем разница между Observable, Flowable, Single, Maybe и Completable? </summary>
+
+  </details>
+
+
 Что такое Observer и Subscriber? Как они связаны?
 Объясни принцип Push vs Pull в контексте RxJava.
 Что такое Backpressure и как с ним работать в RxJava?
