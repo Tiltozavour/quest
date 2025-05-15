@@ -850,11 +850,12 @@ xml
         <data android:mimeType="text/plain" />
     </intent-filter>
 </activity>
-
-</details>
-
-</details>
 ```
+
+</details>
+
+</details>
+
 
 ### **Как реализовать глубокие ссылки (Deep Links) в Android?**
 
