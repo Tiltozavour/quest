@@ -9,10 +9,8 @@
 
 </details>
 
-### **Расскажи что происходит при запуске приложения**
-
-<details>
-  <summary> Ответ </summary>
+ <details>
+  <summary> <h3> **Расскажи что происходит при запуске приложения** </summary>
 
 > 1. Запуск процесса
 ```
@@ -43,10 +41,8 @@ OnCreate() - onStart() - OnResume()
 
 </details>
 
-### Как работает Intent и какие типы Intent существуют? 
-
-<details>
-  <summary> Ответ </summary>
+ <details>
+  <summary> <h3>  Как работает Intent и какие типы Intent существуют?  </summary>
 
 > Intent работает как сообщение, которое передается системе Android, чтобы выполнить какое-либо действие. Система анализирует Intent и находит подходящий компонент (Activity, Service, BroadcastReceiver) для его обработки.
 
@@ -148,11 +144,8 @@ xml
 
 </details>
 
-
-### **Как реализовать глубокие ссылки (Deep Links) в Android?**
-
-<details>
-  <summary> Ответ </summary>
+ <details>
+  <summary> <h3>  Как реализовать глубокие ссылки (Deep Links) в Android?  </summary>
   
 > Глубокие ссылки (Deep Links) позволяют открывать определенные экраны или контент в приложении из внешних источников (веб).\
 > Подключаем manifest -  добавляем intent-фильтры\
@@ -174,8 +167,6 @@ xml
 
 </details>
 
-
- 
 </details>
 
 
