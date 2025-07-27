@@ -3,7 +3,7 @@
   <summary> <h2> 🌱 Junior </h2> </summary>
 
   <details>
-  <summary> Каковы основные компоненты Android и для чего они нужны? </summary>
+  <summary> <h3> Каковы основные компоненты Android и для чего они нужны? <h3> </summary>
 
 > Activity, Services, Broadcast Receiver, Content Provider
 
