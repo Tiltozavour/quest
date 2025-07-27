@@ -1,6 +1,6 @@
 
 <details>
-  <summary><h2> 🌱 Junior </h2></summary>
+  <summary> <h2> 🌱 Junior </h2> </summary>
 
   <details>
   <summary> Каковы основные компоненты Android и для чего они нужны? </summary>
