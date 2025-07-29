@@ -4,4 +4,5 @@
 
 ## 🤖Android SDK 
 - [Базовые компоненты](BASE_COMPONENT.md)
+- [Activity](ACTIVITY.md)
 
