@@ -3432,4 +3432,15 @@ tasks.compileKotlin {
 • Что такое App Bundles и зачем они нужны? 
 • Как работает Dynamic Delivery? 
 • Как использовать Firebase в Android-приложениях? 
+ Что такое Android Manifest и для чего он нужен? 
+• Объясните, что такое ViewModel и как его использовать. 
+• Что такое LiveData и как его применять? 
+• Что такое RecyclerView и как он отличается от ListView? 
+• Как происходит взаимодействие между Activity и Fragment? 
+• Как работает система разрешений в Android? 
+• Как работает back stack в Android? 
+• Чем отличаются Parcelable и Serializable? Какой способ предпочтительнее и 
+почему? 
+• Какие бывают способы межпроцессного взаимодействия (IPC) в Android? 
+• Как реализовать глубокие ссылки (Deep Links) в Android? 
 
