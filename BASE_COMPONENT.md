@@ -116,6 +116,7 @@ unregisterReceiver(receiver)
 
    <details>
   <summary> Принцип работы Content Provider   </summary>
+     
   **ContentProvider** — компонент Android для **обмена данными между приложениями**.
 
 ### Основной принцип:
