@@ -41,8 +41,51 @@
 </details>
 
  <details>
-  <summary> <h3>  Как реализовать глубокие ссылки (Deep Links) в Android?  </summary>
+  <summary> <h3>  Перечислите отличия Service от Bound Service  </summary>
 
+Вот ключевые отличия **Started Service** от **Bound Service**:
+
+| Характеристика | **Started Service** | **Bound Service** |
+|----------------|---------------------|-------------------|
+| **Цель** | Выполнять длительную задачу | Предоставлять интерфейс для взаимодействия |
+| **Запуск** | `startService()` | `bindService()` |
+| **Жизненный цикл** | Работает независимо, останавливается сам или через `stopService()` | Живёт, пока к нему привязан клиент |
+| **Остановка** | `stopSelf()` или `stopService()` | Автоматически при отвязке всех клиентов |
+| **Обмен данными** | Напрямую — нет, только через `BroadcastReceiver`, `LiveData`, `Callbacks` | Да, через `IBinder` — клиент получает интерфейс |
+| **Пример использования** | Загрузка файла, синхронизация | Управление музыкой, передача данных в реальном времени |
+
+> Часто используют **гибрид**: сервис можно и стартовать, и биндить — тогда он работает как Started + Bound.
+  </details>
+
+
+
+ <details>
+  <summary> <h3>  Как зарегистрировать бродкаст ресивер программно  </summary>
+
+> Бродкаст-приёмник можно зарегистрировать программно через Context.registerReceiver() — так он будет работать во время жизни приложения.
+
+```
+val receiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+        when (intent?.action) {
+            Intent.ACTION_BATTERY_LOW -> {
+                // обработка разряда батареи
+            }
+        }
+    }
+}
+
+val filter = IntentFilter(Intent.ACTION_BATTERY_LOW)
+registerReceiver(receiver, filter)
+```
+**Важно:**
+- Такой приёмник живёт только пока приложение в памяти.
+- Обязательно отписаться в onDestroy() (для Activity) или unregisterReceiver(receiver):
+```
+unregisterReceiver(receiver)
+```
+- Подходит для системных событий, актуальных только когда приложение работает.
+> ⚠️ С Android 8+ статическая регистрация в манифесте не работает для большинства implicit-бродкастов — только программная регистрация или explicit-бродкасты. 
   
 </details>
 
@@ -55,6 +98,12 @@
 > Обрабатываем в коде
 
 </details>
+
+ <details>
+  <summary> <h3>  Как реализовать глубокие ссылки (Deep Links) в Android?  </summary>
+
+  </details>
+
 
 </details>
 
