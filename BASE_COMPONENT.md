@@ -5,144 +5,47 @@
   <details>
   <summary> <h3> Каковы основные компоненты Android и для чего они нужны? <h3> </summary>
 
-> Activity, Services, Broadcast Receiver, Content Provider
-
+- **Activity** - экран приложения, отвечает за UI и взаимодействие с пользователем.
+- **Fragment** -  часть интерфейса внутри Activity, упрощает адаптацию под разные экраны.
+- **Service** -  выполняет длительные операции в фоне (например, проигрывание музыки)
+- **BroadcastReceiver** -  реагирует на системные или прикладные события (например, зарядка, смена сети).
+- **Content Provider** - предоставляет доступ к данным между приложениями (например, контакты).
+> Эти компоненты связываются через Intent и управляются системой.
 </details>
 
  <details>
   <summary> <h3> Расскажи что происходит при запуске приложения </summary>
+- Система создаёт новый процесс для приложения и запускает основной поток (main thread).
+- Вызывается метод Application.onCreate() — инициализация глобальных компонентов (например, DI, кэш).
+- Запускается первая Activity (указанная в AndroidManifest.xml с LAUNCHER intent-filter).
+- Вызывается её жизненный цикл: onCreate() → onStart() → onResume() — и она становится видимой.
+- UI отрисовывается через setContentView() и начинается взаимодействие с пользователем.
+> Всё происходит в основном потоке, поэтому тяжёлые операции нужно выносить в фон.
+    
+  </details>
 
-> 1. Запуск процесса
-```
-Когда пользователь запускает приложение, операционная система Android создает новый процесс (если он еще не существует) и выделяет для него ресурсы.
-Каждое приложение в Android работает в изолированном процессе с собственной виртуальной машиной (ART/Dalvik).
-```
-> 2. Загрузка приложения
-```
-Система загружает код приложения из APK-файла.
-Загружаются ресурсы приложения (изображения, строки, макеты и т.д.).
-```
-> 3. Создание объекта Application
-```
-Если в приложении есть пользовательский класс, унаследованный от Application, система создает его экземпляр.
-В этом классе можно выполнить инициализацию глобальных переменных или библиотек (например, Firebase, аналитика и т.д.).
-```
-> 4. Запуск стартовой Activity
-```
-Система определяет, какая Activity должна быть запущена первой (указана в манифесте в теге <intent-filter> с действием MAIN и категорией LAUNCHER).
-Создается экземпляр этой Activity.
-```
-> 5. Жизненный цикл Activity
-```
-OnCreate() - onStart() - OnResume()
-```
-> 6.  Отображение интерфейса\Работа приложения\Фоновые процессы
-> 7.  Заверншение работы
+ <details>
+  <summary> <h3> Какие виды сервисов существуют? Для чего они нужны?  </summary>
+
+В Android есть три основных вида сервисов:
+
+- **Started Service** — запускается startService(), работает в фоне (например, загрузка файла). Продолжает работать, даже если приложение закрыто. Останавливается сам через stopSelf() или stopService() (можно уточнить про Intent - но это легаси).
+- **IntentService (устарел)** — выполнял задачи в фоне в отдельном потоке, автоматически останавливался. Заменён на Service с HandlerThread или WorkManager.
+- **JobIntentService** — замена IntentService, работает на разных версиях Android, использует JobScheduler на API 26+, иначе — старый способ. Также устарел.
+- **Bound Service** — работает как сервер по запросам. Клиент привязывается через bindService(), получает интерфейс для обмена данными (например, проигрывание музыки). Останавливается при отвязке всех клиентов.
+- **Foreground Service** — работает с уведомлением (обязательно), чтобы система не убила его. Используется для важных задач (навигация, запись звонка). Запускается через startForegroundService() и должен вызвать startForeground().
+- **WorkManager** — часть Android Jetpack, предназначен для выполнения отложенных, гарантированных и периодических фоновых задач, которые должны быть выполнены, даже если приложение закрыто или устройство перезагружено.
+  
+> С 8 API (Oreo) фоновые сервисы ограничены — лучше использовать WorkManager или JobScheduler для отложенных задач.
 
 </details>
 
  <details>
-  <summary> <h3>  Как работает Intent и какие типы Intent существуют?  </summary>
+  <summary> <h3>  Как реализовать глубокие ссылки (Deep Links) в Android?  </summary>
 
-> Intent работает как сообщение, которое передается системе Android, чтобы выполнить какое-либо действие. Система анализирует Intent и находит подходящий компонент (Activity, Service, BroadcastReceiver) для его обработки.
-
-<details>
-  <summary> Виды интентов </summary>
-
-<details>
-  <summary> Явный Intent (Explicit Intent) </summary>
- 
-- Указывает конкретный компонент (класс), который должен быть запущен.
-- Используется для взаимодействия внутри приложения.
-
-Пример:
-```
-val intent = Intent(this, SecondActivity::class.java)
-startActivity(intent)
-
-```
-
+  
 </details>
 
-<details>
-  <summary> Неявный Intent (Implicit Intent) </summary>
-
-> Описывает действие, которое нужно выполнить, и система сама находит подходящий компонент (например, браузер, галерею, другое приложение).
-
-**Может содержать:**
-
-Действие (Action) – ACTION_VIEW, ACTION_SEND и т. д.\
-Данные (Data) – URI (например, http://, tel:, content://).\
-Тип данных (Type) – MIME-тип (text/plain, image/jpeg).\
-Категория (Category) – CATEGORY_BROWSABLE, CATEGORY_LAUNCHER.\
-
-Пример:
-```
-kotlin
-val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://google.com"))
-startActivity(intent)
-```
-
-</details>
-
-<details>
-  <summary> Broadcast Intent  </summary>
-
-> Используется для отправки широковещательных сообщений через sendBroadcast().
-
-Пример:
-```
-java
-Intent intent = new Intent("com.example.CUSTOM_ACTION");
-sendBroadcast(intent);
-```
-
-</details>
-
-<details>
-  <summary> PendingIntent  </summary>
-
-> Это Intent, который может быть выполнен другим приложением от имени вашего приложения (например, уведомления или AlarmManager).
-
-Пример:
-```
-java
-PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
-```
-
-</details>
-
-</details>
-
-<details>
-  <summary> Основные действия (Actions) в Intent  </summary>
- 
-- Intent.ACTION_VIEW – открыть данные (веб-страницу, карту, изображение).
-- Intent.ACTION_SEND – отправить данные (текст, изображение).
-- Intent.ACTION_DIAL – набрать номер в телефонном приложении)
-- Intent.ACTION_MAIN – главная точка входа (используется в манифесте для LAUNCHER).
-
-</details>
-
-<details>
-  <summary> Как система находит подходящий компонент?  </summary>
-
-> Для неявных Intent система использует Intent Filter, объявленные в AndroidManifest.xml. Например:
-
-```
-xml
-<activity android:name=".ShareActivity">
-    <intent-filter>
-        <action android:name="android.intent.action.SEND" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <data android:mimeType="text/plain" />
-    </intent-filter>
-</activity>
-```
-
-</details>
-
-</details>
 
  <details>
   <summary> <h3>  Как реализовать глубокие ссылки (Deep Links) в Android?  </summary>
@@ -152,18 +55,6 @@ xml
 > Обрабатываем в коде
 
 </details>
-
- Что такое Android Manifest и для чего он нужен? 
-• Объясните, что такое ViewModel и как его использовать. 
-• Что такое LiveData и как его применять? 
-• Что такое RecyclerView и как он отличается от ListView? 
-• Как происходит взаимодействие между Activity и Fragment? 
-• Как работает система разрешений в Android? 
-• Как работает back stack в Android? 
-• Чем отличаются Parcelable и Serializable? Какой способ предпочтительнее и 
-почему? 
-• Какие бывают способы межпроцессного взаимодействия (IPC) в Android? 
-• Как реализовать глубокие ссылки (Deep Links) в Android? 
 
 </details>
 
