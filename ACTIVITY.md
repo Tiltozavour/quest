@@ -456,6 +456,7 @@ override fun onAttach(context: Context) {
   
 </details>
 
+</details>
 
 <details>
   <summary> <h2> 🌿 Middle </h2> </summary>
