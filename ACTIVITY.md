@@ -115,7 +115,6 @@ onDetach()        // Отвязка от Activity
 
 <details> 
   <summary>Почему нужно прописывать активити в манифесте? </summary>
-</details>
 
 **Activity нужно прописывать в `AndroidManifest.xml`**, потому что:
 
@@ -140,8 +139,9 @@ onDetach()        // Отвязка от Activity
 ```
 
 > ⚠️ С Android 12+ (`API 31`) **все Activity, используемые в приложении, обязательно должны быть объявлены в манифесте**.
-
+ 
 </details>
+
 
 <details> 
 <summary>Какая активити считается стартовой и должна запускаться при клике на иконку приложения? (ACTION_MAIN, CATEGORY_LAUNCHER)</summary>
