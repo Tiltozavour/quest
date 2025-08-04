@@ -365,7 +365,7 @@ class MyFragment : Fragment() {
 </details>
 
 <details> 
-  <summary> <h2> Senior </h2> </summary>
+  <summary> <h2> 🌳 Senior </h2> </summary>
 
 <details> 
   <summary> Как гарантированно доставить данные в Fragment ? (commit не дает такой гарантии)  </summary> 
