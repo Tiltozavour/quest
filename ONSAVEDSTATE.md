@@ -82,6 +82,8 @@ onCreate() → onCreateView() → onViewCreated() → onActivityCreated() → [o
   
 </details>
 
+</details>
+
 <details>
   <summary> <h2> 🌿 Middle </h2> </summary>
 
