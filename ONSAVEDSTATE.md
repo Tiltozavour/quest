@@ -50,7 +50,6 @@ onPause() → onSaveInstanceState() → onStop()
 
 <details> 
   <summary> на каком этапе жизненного цикла фрагмента вызывается onRestoreInstanceState?</summary>
-</details>
 
 `onRestoreInstanceState()` у фрагмента вызывается в **`onActivityCreated()`**, но **после** восстановления состояния Activity.
 
@@ -64,8 +63,9 @@ onCreate() → onCreateView() → onViewCreated() → onActivityCreated() → [o
 ```
 
 > 💡 Используйте `onViewStateRestored()` — более явное место для реакции на восстановление UI-состояния.
-  
+
 </details>
+  
 
 <details> 
   <summary> В каких случаях onRestoreInstanceState не вызывается? </summary>
