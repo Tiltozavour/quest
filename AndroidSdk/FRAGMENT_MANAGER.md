@@ -56,7 +56,3 @@ supportFragmentManager.beginTransaction()
 
 **Далее**
 - [onSaveInstanceState/ onRestoreInstanceState](ONSAVEDSTATE.md)
-
-
-**Оглавление**
-- [Readme](README.md)
