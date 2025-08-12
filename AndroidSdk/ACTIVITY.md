@@ -624,7 +624,3 @@ class OldActivity : AppCompatActivity() {
 
 **Далее**
 - [Fragment](FRAGMENT.md)
-
-**Оглавление**
-- [Readme](README.md)
-
