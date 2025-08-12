@@ -16,6 +16,8 @@
 
 </details>
 
+</details>
+
 <details> 
   <summary> <h2> 🌿 Middle </h2> </summary>
 
@@ -46,8 +48,6 @@
   <summary>В чем заключается особенность push notifications в Foreground и Background. Как отобразить пуш уведомление если оно пришло в Foreground? </summary>
 
   </details>
-
-  
 
   </details>
   
