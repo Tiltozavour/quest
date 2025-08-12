@@ -160,8 +160,3 @@ class MyViewModel(savedState: SavedStateHandle) : ViewModel() {
 
 **Далее**
 - [Notifications](NOTIFICATIONS.md)
-
-
-
-**Оглавление**
-- [Readme](quest/README.md)
