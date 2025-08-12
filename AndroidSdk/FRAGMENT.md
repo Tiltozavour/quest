@@ -471,8 +471,3 @@ val viewModel by activityViewModels<SharedViewModel>()
 **Далее**
 - [FragmentManager](FRAGMENT_MANAGER.md)
 - [onSaveInstanceState/ onRestoreInstanceState](ONSAVEDSTATE.md)
-
-**Оглавление**
-- [Readme](README.md)
-
-
