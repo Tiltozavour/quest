@@ -54,8 +54,6 @@ notificationManager.notify(notificationId, notification)
   <details>
   <summary> Расскажите из чего состоит уведомление? Какие параметры можно настроить? </summary>
 
-  **Middle Android Dev — Notifications**
-
 Уведомление состоит из:
 
 - **Small icon** (обязательно) — маленькая иконка в статус-баре.
@@ -78,8 +76,6 @@ notificationManager.notify(notificationId, notification)
 
    <details>
   <summary> Как создать каналов уведомлений и управлять ими? Какие уровни важности можно установить? </summary>
-
-  </details>
 
 
 **Создание канала:**
@@ -116,6 +112,7 @@ manager.createNotificationChannel(channel)
 
 > Важность задаётся **при создании канала** и влияет на поведение: звук, вибрация, heads-up, показ на экране блокировки.
 
+  </details>  
   
 </details>
 
