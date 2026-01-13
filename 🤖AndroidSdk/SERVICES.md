@@ -106,7 +106,7 @@
 
 
    <details>
-  <summary>   </summary>
+  <summary> Пример использования Service  </summary>
 
   **Пример: Foreground Service для загрузки файла**
 
