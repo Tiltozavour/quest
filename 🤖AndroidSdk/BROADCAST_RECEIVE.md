@@ -156,6 +156,7 @@ Broadcast Receiver — это **"слушатель системных и при
 
 <details>
   <summary> Когда используется Local Broadcast? </summary>
+  
 **Local Broadcast (локальный broadcast)** — это механизм для отправки и получения broadcast'ов **только внутри вашего приложения**.
 
 ---
