@@ -3255,12 +3255,1379 @@ object FeedbackCollector {
   <summary> <h2> 🌳 Senior </h2> </summary>
 
   <details>
-  <summary> </summary>
+  <summary> Каковы ограничения Firebase? </summary>
+
+  ## **Ограничения Firebase для Senior разработчика**
+
+---
+
+## **1. Ограничения производительности и масштабирования**
+
+### **Firestore ограничения:**
+```javascript
+// Жесткие лимиты на операции
+- Запись: 1 операция/сек на документ (500/сек на базу)
+- Чтение: 10,000 документов/сек на базу
+- Размер документа: 1 MiB
+- Глубина вложенности: 100 уровней
+- Максимум индексов: 200 составных, 40 на коллекцию
+```
+
+**Пример проблемы:**
+```kotlin
+// ❌ Counter в Firestore (антипаттерн)
+class CounterService {
+    fun incrementCounter() {
+        // При 1000 пользователей → 1000 операций/сек на один документ
+        // Ограничение: 1 операция/сек
+        db.collection("counters").document("global")
+            .update("count", FieldValue.increment(1))
+    }
+}
+```
+
+**Решение для Senior:**
+```kotlin
+// ✅ Шардинг счетчиков
+class ShardedCounter {
+    private val NUM_SHARDS = 10
+    
+    fun incrementCounter() {
+        // Распределяем по 10 шардам
+        val shardId = Random.nextInt(NUM_SHARDS)
+        db.collection("counters")
+            .document("global")
+            .collection("shards")
+            .document("shard_$shardId")
+            .update("count", FieldValue.increment(1))
+    }
+    
+    fun getCount(): Long {
+        // Суммируем все шарды
+        val shards = db.collection("counters/global/shards").get()
+        return shards.documents.sumOf { it.getLong("count") ?: 0 }
+    }
+}
+```
+
+---
+
+## **2. Архитектурные ограничения**
+
+### **Vendor Lock-in:**
+```kotlin
+// Firebase-специфичный код сложно мигрировать
+class FirebaseSpecific {
+    // Зависимость от Firebase SDK
+    val db = Firebase.firestore
+    val auth = Firebase.auth
+    
+    // Firestore-специфичные операции
+    fun queryWithFirestoreSyntax() {
+        db.collection("users")
+            .whereArrayContains("tags", "premium")
+            .orderBy("createdAt") // Требует composite index
+            .limit(50)
+    }
+}
+
+// Миграция требует полного рефакторинга
+```
+
+**Решение:**
+```kotlin
+// ✅ Абстракция слоя данных
+interface UserRepository {
+    suspend fun getUsers(filters: UserFilters): List<User>
+    suspend fun createUser(user: User)
+}
+
+class FirebaseUserRepository : UserRepository {
+    private val db = Firebase.firestore
+    
+    override suspend fun getUsers(filters: UserFilters): List<User> {
+        // Firebase-специфичная реализация
+        // Но интерфейс позволяет мигрировать
+    }
+}
+
+class PostgresUserRepository : UserRepository {
+    // Другая реализация
+}
+```
+
+---
+
+## **3. Ограничения запросов**
+
+### **Firestore Query Limitations:**
+```sql
+-- НЕВОЗМОЖНО в Firestore:
+SELECT * FROM users 
+WHERE age > 18 
+  AND city = 'Moscow' 
+  AND subscription = 'premium'
+ORDER BY last_login DESC
+LIMIT 20 OFFSET 40
+
+-- Ограничения:
+-- 1. Нельзя фильтровать по двум неравенствам разных полей
+-- 2. Нельзя делать OR между полями
+-- 3. Ограниченная пагинация (только forward, нет OFFSET)
+-- 4. Сложные JOIN невозможны
+```
+
+**Workaround для Senior:**
+```kotlin
+// ✅ Паттерн: Materialized Views
+object UserMaterializedView {
+    
+    // Подготовка данных для сложных запросов
+    suspend fun updateUserView(user: User) {
+        val viewData = mapOf(
+            "age_city_subscription" to "${user.age}_${user.city}_${user.subscription}",
+            "age_subscription" to "${user.age}_${user.subscription}",
+            "city_subscription" to "${user.city}_${user.subscription}",
+            "searchable" to "${user.name} ${user.email} ${user.city}".lowercase()
+        )
+        
+        // Сохраняем прекалькулированные поля
+        db.collection("users_view").document(user.id)
+            .set(viewData, SetOptions.merge())
+    }
+    
+    // Теперь можем эффективно искать
+    suspend fun findPremiumUsersInMoscow(): List<User> {
+        return db.collection("users_view")
+            .whereEqualTo("city_subscription", "Moscow_premium")
+            .get()
+            .documents
+            .map { getUserById(it.id) }
+    }
+}
+```
+
+---
+
+## **4. Транзакционные ограничения**
+
+### **Ограничения транзакций:**
+```kotlin
+// Firestore транзакции:
+val db = Firebase.firestore
+
+db.runTransaction { transaction ->
+    // ❌ Ограничения:
+    // 1. Максимум 500 операций
+    // 2. Таймаут 60 секунд
+    // 3. Нельзя читать после записи
+    // 4. Нельзя делать запросы с limit/offset
+    
+    val doc1 = transaction.get(docRef1)
+    val doc2 = transaction.get(docRef2)
+    
+    // ... логика ...
+    
+    transaction.update(docRef1, mapOf("status" to "completed"))
+    transaction.update(docRef2, mapOf("status" to "pending"))
+    
+    // ❌ Нельзя:
+    // val docs = transaction.get(query.withLimit(10))
+}
+```
+
+**Решение:**
+```kotlin
+// ✅ Паттерн: Компенсирующие транзакции (Saga)
+class OrderSaga {
+    
+    suspend fun processOrder(order: Order) {
+        try {
+            // Шаг 1: Резервирование товара
+            reserveInventory(order.items)
+            
+            // Шаг 2: Блокировка платежа
+            val paymentId = processPayment(order)
+            
+            // Шаг 3: Создание заказа
+            createOrderDocument(order.copy(paymentId = paymentId))
+            
+            // Шаг 4: Отправка уведомления
+            sendOrderConfirmation(order)
+            
+        } catch (e: Exception) {
+            // Компенсирующие действия
+            compensate(order, e)
+        }
+    }
+    
+    private suspend fun compensate(order: Order, error: Exception) {
+        // Откат каждой операции
+        when (error) {
+            is InventoryReservationFailed -> {
+                // Ничего не делаем - резервирование не прошло
+            }
+            is PaymentFailed -> {
+                releaseInventory(order.items) // Компенсация шага 1
+            }
+            is OrderCreationFailed -> {
+                releaseInventory(order.items)
+                refundPayment(order.paymentId)
+            }
+        }
+    }
+}
+```
+
+---
+
+## **5. Ограничения стоимости**
+
+### **Cost Surprises:**
+```javascript
+// Firestore ценообразование:
+- Чтение документа: $0.06 за 100,000
+- Запись документа: $0.18 за 100,000
+- Удаление документа: $0.02 за 100,000
+- Хранение: $0.18/GB/месяц
+
+// Пример дорогой операции:
+function expensiveListener() {
+  // Подписка на изменения коллекции с 10,000 документов
+  db.collection("messages").onSnapshot(snapshot => {
+    // При каждом изменении любого документа:
+    // 1. Читаем ВСЕ 10,000 документов
+    // 2. Платим за 10,000 операций чтения
+    // 3. Если обновляется 1 раз в секунду → $3,110/месяц
+  });
+}
+```
+
+**Оптимизация для Senior:**
+```kotlin
+// ✅ Паттерн: Операционные бюджеты и мониторинг
+class CostOptimizationManager {
+    
+    companion object {
+        // Бюджеты на операции
+        const val DAILY_READ_LIMIT = 1_000_000
+        const val DAILY_WRITE_LIMIT = 100_000
+        const val MONTHLY_STORAGE_LIMIT = 50 * 1024 * 1024 * 1024 // 50GB
+    }
+    
+    private val operationCounters = mutableMapOf<String, Long>()
+    
+    suspend fun <T> withCostControl(
+        operation: String,
+        estimatedCost: Long,
+        block: suspend () -> T
+    ): T {
+        // Проверка лимитов
+        checkDailyLimit(operation, estimatedCost)
+        
+        // Выполнение с мониторингом
+        val startTime = System.currentTimeMillis()
+        val result = block()
+        val actualTime = System.currentTimeMillis() - startTime
+        
+        // Логирование и алерты
+        logOperationCost(operation, estimatedCost, actualTime)
+        
+        if (operationCounters[operation] ?: 0 > DAILY_READ_LIMIT * 0.8) {
+            sendAlert("$operation близко к лимиту")
+        }
+        
+        return result
+    }
+    
+    // Пример использования
+    fun getMessages(chatId: String, limit: Int): List<Message> {
+        return withCostControl("messages_read", limit.toLong()) {
+            db.collection("chats/$chatId/messages")
+                .orderBy("timestamp")
+                .limitToLast(limit)
+                .get()
+                .documents.map { it.toObject(Message::class.java)!! }
+        }
+    }
+}
+```
+
+---
+
+## **6. Ограничения безопасности**
+
+### **Security Rules Complexity:**
+```javascript
+// Сложность валидации бизнес-логики
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /orders/{orderId} {
+      allow create: if // 50+ строк логики
+        request.auth != null &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.items.size() > 0 &&
+        request.resource.data.items.size() <= 10 &&
+        request.resource.data.total >= calculateMinTotal() &&
+        isValidPaymentMethod(request.resource.data.paymentMethod) &&
+        // ... еще 20 условий
+    }
+  }
+  
+  // ❌ Ограничения:
+  // 1. Нет unit тестов для правил
+  // 2. Сложность отладки
+  // 3. Нет типизации
+  // 4. Ограниченные функции
+}
+```
+
+**Решение:**
+```kotlin
+// ✅ Паттерн: Backend для сложной логики + Firebase для простой
+class HybridSecurityArchitecture {
+    
+    // 1. Простая логика в Security Rules
+    private val simpleRules = """
+        match /users/{userId} {
+            allow read, write: if request.auth.uid == userId;
+        }
+    """.trimIndent()
+    
+    // 2. Сложная логика в Cloud Functions
+    @Function("validateOrder")
+    fun validateOrder(data: Map<String, Any>, context: EventContext) {
+        val order = data.toOrder()
+        
+        // Полноценная бизнес-логика
+        val validationResult = OrderValidator.validate(order)
+        
+        if (!validationResult.isValid) {
+            throw FunctionsError("invalid_order", validationResult.errors)
+        }
+        
+        // Логирование, аналитика, нотификации
+        Analytics.logOrderValidation(order)
+        NotifyAdmin.orderCreated(order)
+        
+        // Только после валидации записываем в Firestore
+        return admin.firestore().collection("orders").add(order.toMap())
+    }
+    
+    // 3. Клиент вызывает Function, а не напрямую Firestore
+    suspend fun createOrder(order: Order) {
+        val result = Firebase.functions
+            .getHttpsCallable("validateOrder")
+            .call(order.toMap())
+        
+        if (result.data != null) {
+            // Успешно создано через Function
+        }
+    }
+}
+```
+
+---
+
+## **7. Ограничения мониторинга и отладки**
+
+### **Отладка в production:**
+```kotlin
+// Проблемы:
+// 1. Нет детальных логов запросов
+// 2. Сложно отследить performance bottlenecks
+// 3. Ограниченная аналитика по операциям
+// 4. Нет трассировки распределенных транзакций
+
+class MonitoringWorkaround {
+    
+    // ✅ Кастомное логирование всех операций
+    suspend fun <T> withFirestoreLogging(
+        operation: String,
+        block: suspend () -> T
+    ): T {
+        val traceId = UUID.randomUUID().toString()
+        val startTime = System.currentTimeMillis()
+        
+        Log.d("Firestore", "[$traceId] START $operation")
+        
+        try {
+            val result = block()
+            val duration = System.currentTimeMillis() - startTime
+            
+            Log.d("Firestore", 
+                "[$traceId] END $operation - ${duration}ms")
+            
+            // Отправляем метрики
+            FirebaseAnalytics.logEvent("firestore_operation", mapOf(
+                "operation" to operation,
+                "duration" to duration,
+                "success" to true
+            ))
+            
+            return result
+            
+        } catch (e: Exception) {
+            Log.e("Firestore", "[$traceId] ERROR $operation", e)
+            
+            FirebaseAnalytics.logEvent("firestore_error", mapOf(
+                "operation" to operation,
+                "error" to e.message,
+                "error_type" to e::class.simpleName
+            ))
+            
+            throw e
+        }
+    }
+    
+    // Использование
+    suspend fun getUser(userId: String): User? {
+        return withFirestoreLogging("getUser") {
+            db.collection("users").document(userId).get()
+                .toObject(User::class.java)
+        }
+    }
+}
+```
+
+---
+
+## **8. Ограничения экосистемы**
+
+### **Интеграция с enterprise-системами:**
+```kotlin
+// Проблемы интеграции:
+class EnterpriseIntegrationChallenges {
+    
+    // 1. Нет встроенной поддержки:
+    // - SAP, Oracle, Salesforce
+    // - Корпоративные SSO (SAML, LDAP)
+    // - Системы очередей сообщений (Kafka, RabbitMQ)
+    // - Data warehouses (Snowflake, Redshift)
+    
+    // 2. Ограниченные протоколы:
+    // - Только REST/GraphQL через Functions
+    // - Нет WebSockets для real-time интеграций
+    // - Ограниченная поддержка gRPC
+    
+    // 3. Data governance:
+    // - Сложности с GDPR compliance
+    // - Нет built-in data lineage
+    // - Ограниченный audit trail
+}
+```
+
+**Решение:**
+```kotlin
+// ✅ Паттерн: Firebase как presentation layer
+class EnterpriseFirebaseAdapter {
+    
+    // Firebase только для клиентской части
+    // Бэкенд - enterprise системы
+    
+    suspend fun syncEnterpriseData() {
+        // 1. Получаем данные из enterprise систем
+        val sapData = SAPClient.getOrders()
+        val crmData = SalesforceClient.getCustomers()
+        
+        // 2. Трансформируем для Firebase
+        val firebaseData = transformForFirebase(sapData, crmData)
+        
+        // 3. Синхронизируем в Firebase
+        batchUpdateFirestore(firebaseData)
+        
+        // 4. Логируем синхронизацию
+        auditLogSync(sapData.size, crmData.size)
+    }
+    
+    // Обратная синхронизация
+    suspend fun syncToEnterprise(firebaseData: FirebaseData) {
+        // Из Firebase в enterprise системы
+        SAPClient.updateOrders(firebaseData.toSapFormat())
+        SalesforceClient.updateCustomers(firebaseData.toSalesforceFormat())
+    }
+}
+```
+
+---
+
+## **9. Географические и compliance ограничения**
+
+### **Data residency и sovereignty:**
+```kotlin
+// Проблемы:
+class GeoComplianceIssues {
+    
+    // 1. Выбор регионов ограничен:
+    // - us-central1 (Iowa)
+    // - europe-west1 (Belgium)
+    // - asia-northeast1 (Tokyo)
+    // - Нет России, Китая, других стран
+    
+    // 2. Compliance:
+    // - GDPR: сложно реализовать "right to be forgotten"
+    // - HIPAA: требуется Business Associate Agreement
+    // - PCI DSS: ограниченная поддержка
+    // - Local laws: могут требовать данные в стране
+    
+    // 3. Latency для глобальных приложений:
+    // - Пользователи в Азии → данные в США
+    // - Высокий ping для real-time приложений
+}
+```
+
+**Workaround:**
+```kotlin
+// ✅ Multi-region стратегия
+class MultiRegionFirebaseSetup {
+    
+    // Разные Firebase проекты для разных регионов
+    enum class Region(val projectId: String) {
+        EU("myapp-eu"),
+        US("myapp-us"),
+        ASIA("myapp-asia")
+    }
+    
+    // Динамический выбор региона
+    fun getFirebaseForRegion(region: Region): FirebaseApp {
+        return Firebase.apps.find { it.name == region.name }
+            ?: Firebase.initializeApp(context, getOptions(region), region.name)
+    }
+    
+    // Гео-роутинг пользователей
+    fun getUserRegion(userLocation: Location): Region {
+        return when {
+            userLocation.isInEurope() -> Region.EU
+            userLocation.isInAsia() -> Region.ASIA
+            else -> Region.US
+        }
+    }
+    
+    // Синхронизация между регионами
+    suspend fun syncCrossRegion(userId: String) {
+        val userData = getUserDataFromPrimaryRegion(userId)
+        
+        // Репликация во все регионы
+        listOf(Region.EU, Region.US, Region.ASIA).forEach { region ->
+            withContext(Dispatchers.IO) {
+                saveUserDataToRegion(userData, region)
+            }
+        }
+    }
+}
+```
+
+---
+
+## **10. Ограничения разработки и DevOps**
+
+### **DevOps и Infrastructure as Code:**
+```yaml
+# Ограничения:
+# 1. Нет полного Infrastructure as Code
+# 2. Ограниченная версионизация конфигураций
+# 3. Сложности с blue/green deployments
+# 4. Нет canary releases для Firestore rules
+# 5. Ограниченное тестирование staging
+
+# Пример проблемы - деплой правил:
+# ❌ Нет rollback если правила сломают приложение
+# ❌ Нет A/B тестирования правил
+# ❌ Сложно делать постепенный rollout
+```
+
+**Решение:**
+```kotlin
+// ✅ Паттерн: GitOps для Firebase
+class FirebaseGitOps {
+    
+    // 1. Конфигурация как код
+    data class FirebaseConfig(
+        val firestoreRules: String,
+        val securityRules: String,
+        val indexes: List<String>,
+        val functions: Map<String, String>
+    )
+    
+    // 2. Валидация перед деплоем
+    suspend fun validateConfig(config: FirebaseConfig): ValidationResult {
+        // Локальная проверка правил
+        val rulesResult = FirebaseRulesValidator.validate(config.firestoreRules)
+        
+        // Тестирование на staging проекте
+        val stagingResult = testOnStaging(config)
+        
+        // Проверка совместимости
+        val compatibilityResult = checkBackwardCompatibility(config)
+        
+        return combineResults(rulesResult, stagingResult, compatibilityResult)
+    }
+    
+    // 3. Постепенный деплой
+    suspend fun gradualDeploy(config: FirebaseConfig) {
+        // Этап 1: 1% трафика
+        deployToPercentage(config, percentage = 1)
+        monitorForErrors(duration = Duration.minutes(15))
+        
+        // Этап 2: 10% трафика
+        if (noErrorsDetected()) {
+            deployToPercentage(config, percentage = 10)
+            monitorForErrors(duration = Duration.minutes(30))
+        }
+        
+        // Этап 3: 100% трафика
+        if (noErrorsDetected()) {
+            fullDeploy(config)
+        } else {
+            rollback()
+        }
+    }
+    
+    // 4. Rollback стратегия
+    suspend fun rollbackToVersion(version: String) {
+        val previousConfig = loadConfigFromGit(version)
+        emergencyDeploy(previousConfig)
+        notifyTeam("Rollback to $version completed")
+    }
+}
+```
+
+---
+
+## **Итог для Senior:**
+
+### **Когда НЕ использовать Firebase:**
+1. **Сложные enterprise приложения** с интеграцией многих систем
+2. **Высоконагруженные сервисы** (> 1M операций/сек)
+3. **Строгие compliance требования** (GDPR, HIPAA, PCI DSS)
+4. **Нужен полный контроль** над инфраструктурой
+5. **Бюджетные ограничения** при масштабировании
+
+### **Когда использовать Firebase:**
+1. **Прототипы и MVP** — быстрый старт
+2. **Мобильные приложения** с real-time функциями
+3. **Стартапы** без DevOps команды
+4. **Приложения** с predictable scaling
+
+### **Architecture recommendations:**
+```kotlin
+// Гибридный подход
+class HybridArchitecture {
+    // Firebase для:
+    // - Аутентификация
+    // - Real-time updates
+    // - Push notifications
+    // - Простая аналитика
+    
+    // Свой бэкенд для:
+    // - Сложная бизнес-логика
+    // - Интеграции
+    // - Batch processing
+    // - Data warehousing
+}
+
+// Разделение ответственности
+object ArchitectureLayers {
+    // Presentation Layer: Firebase
+    // Business Logic Layer: Cloud Functions + Custom Backend
+    // Data Layer: Firestore + PostgreSQL + Redis
+    // Integration Layer: Enterprise systems
+}
+```
+
+### **Миграционная стратегия:**
+```kotlin
+// План выхода из Firebase
+class FirebaseExitStrategy {
+    
+    // 1. Абстракция данных
+    interface DataRepository {
+        suspend fun getData(): Data
+    }
+    
+    // 2. Firebase реализация
+    class FirebaseRepository : DataRepository {
+        // ...
+    }
+    
+    // 3. Новая реализация
+    class CustomRepository : DataRepository {
+        // ...
+    }
+    
+    // 4. Dual-write в течение миграции
+    suspend fun migrateData() {
+        val firebaseData = firebaseRepo.getAllData()
+        customRepo.saveData(firebaseData)
+        
+        // Читаем из обоих, пишем в оба
+        // Постепенно переносим трафик
+    }
+}
+```
+
+**Ключевое:** Firebase отлично подходит для начала, но нужно планировать exit strategy с самого начала для enterprise-grade приложений.
 
   </details>
 
   <details>
-  <summary>  </summary>
+  <summary> Как обновить новое приложение Firebase из существующего старого приложения? </summary>
+
+  ## **Обновление Firebase SDK в существующем приложении (Senior Guide)**
+
+---
+
+## **1. Анализ текущего состояния**
+
+### **Проверка текущих зависимостей:**
+```gradle
+// 1. Посмотреть текущие версии
+// build.gradle (app)
+dependencies {
+    implementation 'com.google.firebase:firebase-core:16.0.9'       // Устарело
+    implementation 'com.google.firebase:firebase-auth:17.0.0'       // Устарело  
+    implementation 'com.google.firebase:firebase-database:19.7.0'   // Старое название
+    implementation 'com.google.firebase:firebase-messaging:20.3.0'  // Старое название
+}
+```
+
+### **Проверка устаревших API:**
+```kotlin
+// 2. Найти устаревшие вызовы в коде
+// ❌ Устаревшие API:
+FirebaseInstanceId.getInstance().instanceId  // Устарело в 2020
+FirebaseDatabase.getInstance().setPersistenceEnabled(true)  // Изменено
+FirebaseApp.initializeApp(this)  // Теперь автоматически
+```
+
+---
+
+## **2. План миграции**
+
+### **Этап 1: Подготовительные работы**
+```bash
+# Создать ветку для миграции
+git checkout -b firebase-migration
+
+# Создать backup проекта
+cp -r project/ project-backup-firebase/
+
+# Установить последнюю версию Android Studio
+# Установить последнюю версию Gradle
+```
+
+### **Этап 2: Обновление Gradle и плагинов**
+```gradle
+// project-level build.gradle
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Обновить до последней стабильной
+        classpath 'com.android.tools.build:gradle:8.1.0'
+        classpath 'com.google.gms:google-services:4.4.0'
+        classpath 'com.google.firebase:firebase-crashlytics-gradle:2.9.9'
+        classpath 'com.google.firebase:perf-plugin:1.4.2'
+    }
+}
+```
+
+---
+
+## **3. Миграция зависимостей**
+
+### **Старая структура (до BoM):**
+```gradle
+// ❌ Устаревший способ (разные версии)
+dependencies {
+    implementation 'com.google.firebase:firebase-auth:21.0.0'
+    implementation 'com.google.firebase:firebase-firestore:24.0.0'
+    implementation 'com.google.firebase:firebase-storage:20.0.0'
+    implementation 'com.google.firebase:firebase-messaging:23.0.0'
+    // Проблема: разные версии, возможны конфликты
+}
+```
+
+### **Новая структура (с BoM):**
+```gradle
+// ✅ Рекомендуемый способ с Bill of Materials
+dependencies {
+    // Firebase BoM для управления версиями
+    implementation platform('com.google.firebase:firebase-bom:32.4.0')
+    
+    // Зависимости без указания версий
+    implementation 'com.google.firebase:firebase-analytics'
+    implementation 'com.google.firebase:firebase-auth'
+    implementation 'com.google.firebase:firebase-firestore'
+    implementation 'com.google.firebase:firebase-storage'
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'com.google.firebase:firebase-crashlytics'
+    implementation 'com.google.firebase:firebase-config'
+    implementation 'com.google.firebase:firebase-perf'
+    
+    // Kotlin extensions (если используете Kotlin)
+    implementation 'com.google.firebase:firebase-firestore-ktx'
+    implementation 'com.google.firebase:firebase-auth-ktx'
+}
+```
+
+### **Таблица миграции зависимостей:**
+| Старая зависимость | Новая зависимость | Примечания |
+|-------------------|-------------------|------------|
+| `firebase-database` | `firebase-database` или `firebase-firestore` | Realtime DB еще поддерживается |
+| `firebase-ads` | `firebase-ads` | Без изменений |
+| `firebase-core` | Удалить | Заменено на firebase-analytics |
+| `firebase-invites` | Удалить | Сервис закрыт |
+| `firebase-dynamic-links` | `firebase-dynamic-links` | API изменилось |
+
+---
+
+## **4. Миграция кода**
+
+### **Миграция Instance ID → Firebase Installations:**
+```kotlin
+// ❌ Устаревший способ (до 2020)
+FirebaseInstanceId.getInstance().instanceId
+    .addOnCompleteListener { task ->
+        val token = task.result?.token
+        // Использование токена
+    }
+
+// ✅ Новый способ (2020+)
+FirebaseInstallations.getInstance().id
+    .addOnCompleteListener { task ->
+        val installationId = task.result
+        // Использование installationId
+    }
+
+// Для FCM токена:
+FirebaseMessaging.getInstance().token
+    .addOnCompleteListener { task ->
+        val fcmToken = task.result
+        // Использование FCM токена
+    }
+```
+
+### **Миграция Firebase Database API:**
+```kotlin
+// ❌ Старый API (до Kotlin extensions)
+val database = FirebaseDatabase.getInstance()
+val ref = database.getReference("path")
+ref.addValueEventListener(object : ValueEventListener {
+    override fun onDataChange(snapshot: DataSnapshot) {
+        // Обработка
+    }
+    override fun onCancelled(error: DatabaseError) {
+        // Обработка ошибки
+    }
+})
+
+// ✅ Новый API (с Kotlin extensions)
+val ref = Firebase.database.reference.child("path")
+ref.addValueEventListener { snapshot ->
+    // Обработка данных
+    // Автоматическая отмена при ошибке
+}
+```
+
+### **Миграция Cloud Firestore:**
+```kotlin
+// ❌ Старый API
+val db = FirebaseFirestore.getInstance()
+db.collection("users")
+    .document(userId)
+    .get()
+    .addOnCompleteListener { task ->
+        if (task.isSuccessful) {
+            val user = task.result?.toObject(User::class.java)
+        }
+    }
+
+// ✅ Новый API (с Kotlin extensions)
+val user = Firebase.firestore
+    .collection("users")
+    .document(userId)
+    .get()
+    .await()
+    .toObject(User::class.java)
+```
+
+---
+
+## **5. Обработка breaking changes**
+
+### **Cloud Messaging breaking changes:**
+```kotlin
+// ❌ Устаревший FirebaseMessagingService
+class MyFirebaseMessagingService : FirebaseMessagingService() {
+    override fun onMessageReceived(remoteMessage: RemoteMessage) {
+        // Требует Android 6.0+
+    }
+    
+    override fun onNewToken(token: String) {
+        // Вызывается при обновлении токена
+    }
+}
+
+// ✅ Проверка на новые требования
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    // Создание notification channel обязательно
+    createNotificationChannel()
+}
+
+// ✅ Обработка данных сообщений
+override fun onMessageReceived(remoteMessage: RemoteMessage) {
+    // Приоритет обработки:
+    // 1. Data messages (всегда обрабатываются)
+    // 2. Notification messages (только если приложение на переднем плане)
+    
+    remoteMessage.data.isNotEmpty().let { data ->
+        // Обработка данных
+    }
+    
+    remoteMessage.notification?.let { notification ->
+        // Показ уведомления
+    }
+}
+```
+
+### **Firebase Auth breaking changes:**
+```kotlin
+// ❌ Устаревшие методы
+FirebaseAuth.getInstance()
+    .signInWithEmailAndPassword(email, password)
+    .addOnCompleteListener(this) { task ->
+        // Deprecated: Activity context
+    }
+
+// ✅ Новые методы с безопасной отменой
+val auth = Firebase.auth
+
+// Использование Lifecycle-aware компонентов
+lifecycleScope.launch {
+    try {
+        val result = auth.signInWithEmailAndPassword(email, password).await()
+        // Обработка успеха
+    } catch (e: Exception) {
+        // Обработка ошибки
+    }
+}
+
+// ✅ Safe API calls
+suspend fun safeSignIn(email: String, password: String): AuthResult {
+    return suspendCoroutine { continuation ->
+        auth.signInWithEmailAndPassword(email, password)
+            .addOnSuccessListener { continuation.resume(it) }
+            .addOnFailureListener { continuation.resumeWithException(it) }
+            .addOnCanceledListener { 
+                continuation.resumeWithException(CancellationException())
+            }
+    }
+}
+```
+
+---
+
+## **6. Миграция Crashlytics**
+
+### **Из Fabric/Firebase Crashlytics migration:**
+```gradle
+// Старый Fabric Crashlytics:
+implementation 'com.crashlytics.sdk.android:crashlytics:2.10.1'
+
+// Новый Firebase Crashlytics:
+implementation 'com.google.firebase:firebase-crashlytics'
+```
+
+```kotlin
+// ❌ Старый Fabric API
+Crashlytics.logException(e)
+Crashlytics.setString("key", "value")
+
+// ✅ Новый Firebase Crashlytics API
+FirebaseCrashlytics.getInstance().recordException(e)
+FirebaseCrashlytics.getInstance().setCustomKey("key", "value")
+
+// ✅ Новые возможности
+FirebaseCrashlytics.getInstance().apply {
+    setCrashlyticsCollectionEnabled(true)  // Контроль сбора
+    sendUnsentReports()  // Отправка накопленных отчетов
+    deleteUnsentReports()  // Удаление отчетов
+    log("Custom log message")  // Логирование
+}
+```
+
+---
+
+## **7. Миграция Performance Monitoring**
+
+```kotlin
+// ❌ Старый API (если использовался)
+val trace = FirebasePerformance.getInstance().newTrace("trace_name")
+trace.start()
+
+// ... код ...
+
+trace.stop()
+
+// ✅ Новый API с улучшениями
+val trace = Firebase.performance.newTrace("trace_name").apply {
+    incrementMetric("attempts", 1)
+    putAttribute("user_type", "premium")
+}
+
+trace.start()
+
+// ... код ...
+
+// Добавление пользовательских атрибутов во время выполнения
+trace.putAttribute("result", "success")
+trace.incrementMetric("items_processed", items.size)
+
+trace.stop()
+```
+
+---
+
+## **8. Работа с Dynamic Links**
+
+```kotlin
+// ❌ Старый API
+FirebaseDynamicLinks.getInstance()
+    .getDynamicLink(intent)
+    .addOnSuccessListener { pendingDynamicLinkData ->
+        val deepLink = pendingDynamicLinkData?.link
+    }
+
+// ✅ Новый API с улучшенной обработкой
+Firebase.dynamicLinks
+    .getDynamicLink(intent)
+    .addOnSuccessListener { pendingDynamicLinkData ->
+        pendingDynamicLinkData?.let { linkData ->
+            // Улучшенная обработка
+            val deepLink = linkData.link
+            val minAppVersion = linkData.minimumAppVersion
+            val utmParameters = linkData.utmParameters
+            
+            // Автоматическое перенаправление в Play Store
+            if (linkData.updateAppIntent != null) {
+                startActivity(linkData.updateAppIntent)
+            }
+        }
+    }
+```
+
+---
+
+## **9. Стратегия постепенной миграции**
+
+### **Паттерн: Feature Flags для миграции**
+```kotlin
+object MigrationFlags {
+    // Контроль миграции через Remote Config
+    private const val USE_NEW_FIREBASE_API = "use_new_firebase_api"
+    private const val USE_BOM_VERSIONING = "use_bom_versioning"
+    
+    suspend fun isMigrationEnabled(feature: String): Boolean {
+        val remoteConfig = FirebaseRemoteConfig.getInstance()
+        remoteConfig.fetchAndActivate().await()
+        return remoteConfig.getBoolean(feature)
+    }
+}
+
+// Использование флагов
+class FirebaseMigrationManager {
+    
+    suspend fun getDatabase(): Any {
+        return if (MigrationFlags.isMigrationEnabled("use_new_firebase_api")) {
+            // Новый API
+            Firebase.firestore
+        } else {
+            // Старый API
+            FirebaseFirestore.getInstance()
+        }
+    }
+    
+    fun getAuth(): FirebaseAuth {
+        return if (BuildConfig.USE_NEW_AUTH_API) {
+            Firebase.auth
+        } else {
+            FirebaseAuth.getInstance()
+        }
+    }
+}
+```
+
+### **Паттерн: Adapter для обратной совместимости**
+```kotlin
+interface FirebaseAuthAdapter {
+    suspend fun signIn(email: String, password: String): User
+    suspend fun signOut()
+    fun getCurrentUser(): User?
+}
+
+// Старая реализация
+class LegacyFirebaseAuthAdapter : FirebaseAuthAdapter {
+    private val auth = FirebaseAuth.getInstance()
+    
+    override suspend fun signIn(email: String, password: String): User {
+        return suspendCoroutine { continuation ->
+            auth.signInWithEmailAndPassword(email, password)
+                .addOnSuccessListener { result ->
+                    continuation.resume(result.user?.toDomainUser()!!)
+                }
+                .addOnFailureListener { continuation.resumeWithException(it) }
+        }
+    }
+}
+
+// Новая реализация  
+class ModernFirebaseAuthAdapter : FirebaseAuthAdapter {
+    private val auth = Firebase.auth
+    
+    override suspend fun signIn(email: String, password: String): User {
+        val result = auth.signInWithEmailAndPassword(email, password).await()
+        return result.user?.toDomainUser()!!
+    }
+}
+
+// Фабрика выбирает реализацию
+object FirebaseAdapterFactory {
+    fun createAuthAdapter(): FirebaseAuthAdapter {
+        return if (isNewFirebaseEnabled()) {
+            ModernFirebaseAuthAdapter()
+        } else {
+            LegacyFirebaseAuthAdapter()
+        }
+    }
+}
+```
+
+---
+
+## **10. Тестирование миграции**
+
+### **Unit тесты для миграции:**
+```kotlin
+@Test
+fun testFirebaseAuthMigration() {
+    // Тестируем совместимость API
+    val oldAuth = FirebaseAuth.getInstance()
+    val newAuth = Firebase.auth
+    
+    // Проверяем, что оба API работают
+    assertNotNull(oldAuth)
+    assertNotNull(newAuth)
+    
+    // Проверяем эквивалентность
+    assertEquals(oldAuth.currentUser?.uid, newAuth.currentUser?.uid)
+}
+
+@Test
+fun testFirestoreDataCompatibility() {
+    // Проверяем, что данные читаются обоими API
+    val oldDb = FirebaseFirestore.getInstance()
+    val newDb = Firebase.firestore
+    
+    // Читаем одни и те же данные
+    val oldData = oldDb.collection("test").document("1").get().await()
+    val newData = newDb.collection("test").document("1").get().await()
+    
+    assertEquals(oldData.data, newData.data)
+}
+```
+
+### **Integration тесты:**
+```kotlin
+@RunWith(AndroidJUnit4::class)
+class FirebaseMigrationIntegrationTest {
+    
+    @get:Rule
+    val activityRule = ActivityTestRule(MainActivity::class.java)
+    
+    @Test
+    fun testCompleteMigrationScenario() {
+        // 1. Проверяем старый API
+        onView(withId(R.id.old_login_button)).perform(click())
+        
+        // 2. Переключаем на новый API
+        TestMigrationFlags.enableNewFirebaseAPI()
+        
+        // 3. Проверяем новый API
+        onView(withId(R.id.new_login_button)).perform(click())
+        
+        // 4. Проверяем, что данные сохранились
+        onView(withId(R.id.user_data))
+            .check(matches(withText(containsString("test@example.com"))))
+    }
+}
+```
+
+### **Performance тесты:**
+```kotlin
+@RunWith(AndroidJUnit4::class)
+class FirebaseMigrationPerformanceTest {
+    
+    @Test
+    fun testNewApiPerformance() {
+        val metrics = ArrayList<Long>()
+        
+        repeat(100) {
+            val startTime = System.nanoTime()
+            
+            // Тестируем новый API
+            Firebase.auth.signInWithEmailAndPassword("test", "pass").await()
+            
+            val duration = System.nanoTime() - startTime
+            metrics.add(duration)
+        }
+        
+        val avg = metrics.average() / 1_000_000.0
+        assertTrue("New API too slow: ${avg}ms", avg < 100.0)
+    }
+}
+```
+
+---
+
+## **11. Деплой и мониторинг миграции**
+
+### **Поэтапный rollout:**
+```kotlin
+// Этап 1: 1% пользователей
+object MigrationRollout {
+    
+    private val rolloutPercentage = mapOf(
+        "firebase_auth_new" to 1,
+        "firestore_new_api" to 1,
+        "crashlytics_new" to 5,
+        "complete_migration" to 0
+    )
+    
+    fun shouldUserGetNewFirebase(userId: String): Boolean {
+        val hash = userId.hashCode() % 100
+        return hash < rolloutPercentage["firebase_auth_new"]!!
+    }
+}
+```
+
+### **Мониторинг миграции:**
+```kotlin
+class MigrationMonitor {
+    
+    fun trackMigrationEvent(event: String, success: Boolean) {
+        FirebaseAnalytics.getInstance(context).logEvent(
+            "firebase_migration",
+            Bundle().apply {
+                putString("event", event)
+                putBoolean("success", success)
+                putString("sdk_version", FirebaseApp.getInstance().options.applicationId)
+                putString("app_version", BuildConfig.VERSION_NAME)
+            }
+        )
+        
+        // Отправляем в Crashlytics для мониторинга ошибок
+        if (!success) {
+            FirebaseCrashlytics.getInstance().log("Migration failed: $event")
+        }
+    }
+    
+    fun comparePerformanceMetrics() {
+        // Сравниваем метрики старого и нового API
+        val oldLatency = getMetric("auth_latency_old")
+        val newLatency = getMetric("auth_latency_new")
+        
+        val improvement = (oldLatency - newLatency) / oldLatency * 100
+        log.info("Performance improvement: ${improvement}%")
+    }
+}
+```
+
+---
+
+## **12. Rollback стратегия**
+
+```kotlin
+object RollbackManager {
+    
+    // Конфигурация для быстрого отката
+    private val rollbackConfig = mapOf(
+        "firebase_dependencies" to """
+            implementation 'com.google.firebase:firebase-auth:21.0.0'
+            implementation 'com.google.firebase:firebase-firestore:24.0.0'
+        """.trimIndent(),
+        "gradle_plugin" to "classpath 'com.google.gms:google-services:4.3.10'"
+    )
+    
+    fun prepareRollback() {
+        // 1. Backup текущего состояния
+        createGitBranch("rollback-backup-${System.currentTimeMillis()}")
+        
+        // 2. Подготовить старые версии зависимостей
+        writeRollbackDependencies()
+        
+        // 3. Создать patch для отката кода
+        createCodeRollbackPatch()
+    }
+    
+    fun executeRollback() {
+        // 1. Вернуть старые зависимости
+        restoreGradleFiles()
+        
+        // 2. Вернуть старый код
+        applyRollbackPatch()
+        
+        // 3. Очистить кэш Gradle
+        cleanGradleCache()
+        
+        // 4. Уведомить команду
+        sendRollbackNotification()
+    }
+}
+```
+
+---
+
+## **Итог для Senior:**
+
+### **Ключевые шаги миграции:**
+1. **Анализ** текущих зависимостей и API
+2. **Планирование** поэтапной миграции
+3. **Обновление** Gradle и плагинов
+4. **Миграция** на BoM для управления версиями
+5. **Обновление** устаревших API вызовов
+6. **Тестирование** на всех уровнях
+7. **Постепенный rollout** с feature flags
+8. **Мониторинг** производительности и ошибок
+9. **Подготовка** rollback стратегии
+
+### **Критические точки:**
+- **Instance ID → Firebase Installations** — breaking change
+- **Fabric Crashlytics → Firebase Crashlytics** — меняется API
+- **Старые названия пакетов** (firebase-database → firebase-firestore)
+- **Kotlin extensions** — новый, более безопасный API
+
+### **Рекомендации:**
+1. **Не мигрировать всё сразу** — использовать feature flags
+2. **Тестировать на реальных устройствах** — эмуляторы могут не показать всех проблем
+3. **Мониторить Crashlytics** после каждого этапа миграции
+4. **Иметь backup** на каждом этапе
+5. **Коммуницировать с командой** — миграция влияет на всех разработчиков
+
+### **Метрики успеха:**
+- ✅ Нет регрессии в производительности
+- ✅ Снижение количества крашей
+- ✅ Улучшение developer experience
+- ✅ Поддержка новых функций Firebase
+- ✅ Возможность легко обновляться в будущем
+
+  </details>
+
+   <details>
+  <summary> ККак подключить App Distribution? </summary>
 
   </details>
 
